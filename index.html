@@ -377,6 +377,43 @@
     .modal-campos { grid-template-columns: 1fr; }
   }
 
+  /* ===== CARTÃO KPI CLICÁVEL ===== */
+  .kpi-clicavel { cursor: pointer; transition: background .14s, border-color .14s, transform .14s; }
+  .kpi-clicavel:hover {
+    background: var(--bg3); border-color: rgba(59,130,246,.4); transform: translateY(-2px);
+  }
+  .kpi-clicavel::before {
+    content: '\21F2'; position: absolute; right: .6rem; bottom: .5rem;
+    font-size: .8rem; color: var(--texto-muted); opacity: 0; transition: opacity .14s;
+  }
+  .kpi-clicavel:hover::before { opacity: .85; }
+
+  /* ===== TABELA DENTRO DO MODAL ===== */
+  .modal-tabela-wrap { overflow-x: auto; border: 1px solid var(--borda); border-radius: 10px; }
+  .modal-tabela { width: 100%; border-collapse: collapse; font-size: .81rem; min-width: 420px; }
+  .modal-tabela thead th {
+    position: sticky; top: 0; background: var(--bg3);
+    text-align: left; padding: .55rem .7rem; font-size: .64rem;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--texto-muted);
+    font-weight: 700; white-space: nowrap; border-bottom: 1px solid var(--borda);
+  }
+  .modal-tabela thead th.dir, .modal-tabela td.dir { text-align: right; }
+  .modal-tabela tbody td {
+    padding: .5rem .7rem; border-bottom: 1px solid rgba(30,45,74,.5);
+    vertical-align: top; line-height: 1.45;
+  }
+  .modal-tabela tbody tr:last-child td { border-bottom: none; }
+  .modal-tabela tbody tr:hover { background: rgba(255,255,255,.03); }
+  .modal-lista-nota { font-size: .74rem; color: var(--texto-muted); margin-top: .55rem; }
+  .modal-lista-total {
+    margin-top: .8rem; padding: .7rem .9rem; border-radius: 9px;
+    background: var(--bg3); border: 1px solid var(--borda);
+    font-size: .85rem; font-weight: 600;
+  }
+  .modal-lista-total b { color: var(--azul-claro); }
+  .resumo-item.item-clicavel { cursor: pointer; transition: background .14s, border-color .14s; }
+  .resumo-item.item-clicavel:hover { background: var(--bg4); border-color: rgba(59,130,246,.4); }
+
   .filtro-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
                   color: var(--texto-muted); font-weight: 700; white-space: nowrap; }
 </style>
@@ -835,6 +872,79 @@ function ligarBusca(id, aoDigitar) {
   limpar.addEventListener('click', () => { el.value = ''; el.focus(); disparar(); });
 }
 
+/* =========================================================================
+   LISTA DENTRO DO MODAL
+   Para quando o clique num cartão precisa mostrar "quais registros estão
+   por trás deste número".
+   ========================================================================= */
+/**
+ * abrirLista({ titulo, sub, colunas:[{r,chave,alinha,formata}], linhas:[obj],
+ *              vazio, rodape, notas:[{tipo,html}], limite })
+ */
+function abrirLista(cfg) {
+  const cols = cfg.colunas || [];
+  const linhas = cfg.linhas || [];
+  const limite = cfg.limite || 300;
+  const vis = linhas.slice(0, limite);
+
+  let html = '';
+  if (cfg.resumo && cfg.resumo.length) {
+    html += '<div class="modal-campos" style="margin-bottom:1rem">' +
+      cfg.resumo.map(c => '<div class="modal-campo">' +
+        '<div class="modal-rotulo">' + c.r + '</div>' +
+        '<div class="modal-valor ' + (c.classe || '') + '">' + c.v + '</div></div>').join('') +
+      '</div>';
+  }
+
+  if (!vis.length) {
+    html += '<div class="obs-vazio">' + (cfg.vazio || 'Nenhum registro para exibir.') + '</div>';
+  } else {
+    html += '<div class="modal-tabela-wrap"><table class="modal-tabela"><thead><tr>' +
+      cols.map(c => '<th' + (c.alinha === 'dir' ? ' class="dir"' : '') + '>' + c.r + '</th>').join('') +
+      '</tr></thead><tbody>' +
+      vis.map(l => '<tr>' + cols.map(c => {
+        const bruto = l[c.chave];
+        const v = c.formata ? c.formata(bruto, l) : (bruto === null || bruto === undefined || bruto === '' ? '—' : esc(bruto));
+        return '<td' + (c.alinha === 'dir' ? ' class="dir"' : '') + '>' + v + '</td>';
+      }).join('') + '</tr>').join('') +
+      '</tbody></table></div>';
+    if (linhas.length > vis.length) {
+      html += '<div class="modal-lista-nota">Exibindo os ' + vis.length + ' primeiros de ' +
+        linhas.length + ' registros.</div>';
+    } else {
+      html += '<div class="modal-lista-nota">' + linhas.length + ' registro' +
+        (linhas.length === 1 ? '' : 's') + '.</div>';
+    }
+  }
+
+  if (cfg.rodape) html += '<div class="modal-lista-total">' + cfg.rodape + '</div>';
+  (cfg.notas || []).forEach(n => {
+    if (n && n.html) html += '<div class="modal-nota ' + (n.tipo || '') + '">' + n.html + '</div>';
+  });
+
+  const f = document.getElementById('modalFundo');
+  document.getElementById('modalTitulo').innerHTML = cfg.titulo || '';
+  document.getElementById('modalSub').innerHTML = cfg.sub || '';
+  document.getElementById('modalCorpo').innerHTML = html;
+  f.classList.remove('oculto');
+  requestAnimationFrame(() => f.classList.add('aberto'));
+}
+
+/** Marca um cartão KPI como clicável e liga ao detalhamento. */
+function kpiClicavel(indice, aoAbrir) {
+  const cartoes = document.querySelectorAll('#kpis .kpi');
+  const el = cartoes[indice];
+  if (!el) return;
+  el.classList.add('kpi-clicavel');
+  el.title = 'Clique para ver os registros';
+  el.addEventListener('click', aoAbrir);
+}
+
+/** Liga vários cartões de uma vez: mapa {indice: função}. */
+function ligarKPIs(mapa) {
+  Object.keys(mapa).forEach(i => kpiClicavel(Number(i), mapa[i]));
+}
+
 
 /* =========================================================================
    APLICAÇÃO
@@ -985,6 +1095,8 @@ function renderKPIs(itens, a) {
     cartaoKPI('Sem Data de Pagamento', num(a.semData), a.semData > 0 ? 'amarelo' : 'verde',
       '<span>não entram na análise por mês nem no tempo de espera</span>')
   ].join('');
+
+  ligarDetalheKPIs(itens, a);
 }
 
 function renderSituacao(itens, a) {
@@ -1318,6 +1430,55 @@ function render(dados) {
   BASE = montarBase(dados, hojeZerado());
   montarControles();
   desenhar();
+}
+
+/* =========================================================================
+   DETALHE DOS CARTÕES
+   ========================================================================= */
+const COL_NF = [
+  { r: 'Cliente', chave: 'cliente', formata: (v, l) => '<b>' + esc(v) + '</b>' +
+      (l.doc ? '<br><span style="color:var(--texto-muted);font-size:.72rem">' + esc(l.doc) + '</span>' : '') },
+  { r: 'Pagamento', chave: 'data', formata: v => v ? v.toLocaleDateString('pt-BR') : '<span style="color:var(--texto-muted)">sem data</span>' },
+  { r: 'Valor', chave: 'valor', alinha: 'dir', formata: v => '<b>' + moeda(v) + '</b>' },
+  { r: 'Situação', chave: 'situacao', formata: (v, l) => '<span class="tag-pct ' +
+      (v === 'Lançada' ? 'verde' : v === 'Pendente' ? 'vermelho' : v === 'Lançar Depois' ? 'amarelo' : 'neutro') +
+      '">' + esc(v) + '</span>' + (l.semNota && l.idade !== null
+        ? ' <span style="color:var(--texto-muted);font-size:.72rem">' + l.idade + 'd</span>' : '') }
+];
+
+function listaNF(titulo, linhas, nota, tipoNota) {
+  const soma = linhas.reduce((s, x) => s + x.valor, 0);
+  abrirLista({
+    titulo,
+    sub: linhas.length + ' pagamento' + (linhas.length === 1 ? '' : 's') + ' · ' + moeda(soma),
+    colunas: COL_NF,
+    linhas: [...linhas].sort((a, b) => b.valor - a.valor),
+    rodape: 'Total: <b>' + moeda(soma) + '</b>',
+    notas: nota ? [{ tipo: tipoNota || '', html: nota }] : []
+  });
+}
+
+function ligarDetalheKPIs(itens, a) {
+  const semNotaL = itens.filter(x => x.semNota);
+  const regularL = itens.filter(x => !x.semNota && x.situacao !== 'Não informada');
+  ligarKPIs({
+    0: () => listaNF('Valor Recebido', itens,
+      'Todos os pagamentos registrados no período selecionado.'),
+    1: () => listaNF('Com Nota Emitida', regularL,
+      'Inclui notas <b>lançadas</b> e casos <b>dispensados</b> — os dois estão regulares.'),
+    2: () => listaNF('Sem Nota Emitida', semNotaL,
+      'Reúne <b>Pendente</b> e <b>Lançar Depois</b>: nos dois casos há receita recebida sem documento fiscal.', 'critico'),
+    3: () => listaNF('Conformidade Fiscal — o que falta', semNotaL,
+      'A conformidade é calculada por <b>valor</b>, não por quantidade. Esta é a lista que precisa ser regularizada para o indicador subir.', 'alerta'),
+    4: () => listaNF('Pendentes há mais de 90 dias',
+      semNotaL.filter(x => x.idade !== null && x.idade > 90),
+      'Emissão retroativa acima de um trimestre costuma exigir justificativa e pode ter o crédito de imposto questionado.', 'critico'),
+    5: () => listaNF('Espera pela emissão',
+      [...semNotaL].filter(x => x.idade !== null).sort((x, y) => y.idade - x.idade),
+      'Ordenados do mais antigo para o mais recente.', 'alerta'),
+    7: () => listaNF('Pagamentos sem data', itens.filter(x => !x.data),
+      'Sem data, estes registros ficam fora da análise mensal e não têm tempo de espera calculado.', 'alerta')
+  });
 }
 
 
